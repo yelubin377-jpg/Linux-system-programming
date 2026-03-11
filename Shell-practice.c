@@ -145,3 +145,75 @@
 
 // }
 //注意这里会“进程分裂”，fork（）后分裂成两个进程，一个去if（父进程），一个去else（子进程）。
+
+
+
+
+
+
+// //dup2(旧文件，新文件）  dup2后新文件指向旧文件
+// #include<stdio.h>
+// #include<unistd.h>  //dup2,close
+// #include<fcntl.h>  //open
+// //O_WRONLY 只写
+// //O_CREAT 如果文件不存在，就创建
+// //O_TRUNC 如果文件一存在，就把他的长度截断为0（清空内容）
+// //0644 文件权限，文件所有者可读可写，其他人只读
+// int main()
+// {
+//     int File = open("output.txt",O_WRONLY|O_CREAT|O_TRUNC,0644);
+//     if(File < 0)
+//     {
+//         perror("open");
+//         return 1;
+//     }
+
+//     int CunChu = dup(STDOUT_FILENO);
+//     if(dup2(File,STDOUT_FILENO) == -1 )
+//     {
+//         perror("dup2");
+//         close(File);
+//         return 1;
+//     }
+//     close(File);
+//     //此时输出端STDOUT被定位到了output.txt内
+//     printf("Try it");//不会在终端显示
+    
+//     //现在开始恢复在终端输出
+//     fflush(stdout);//先清理终端缓冲区
+//     if(dup2(CunChu,STDOUT_FILENO)==-1)
+//     {
+//         perror("dup2");
+//         close(CunChu);
+//         return 1;
+//     }
+//     close(CunChu);
+//     printf("Try again");//理论上此时在终端输出
+//     return 0;
+
+// }
+
+
+
+
+
+//signal(信号类型，执行函数)
+#include<stdio.h>//printf
+#include<signal.h>//signal();
+#include<stdlib.h> //exit
+
+void CeShi(int sig)
+{
+    printf("收到");
+    exit(0);
+}
+int main()
+{
+    signal(SIGTERM,CeShi);
+    signal(SIGINT,CeShi);
+    printf("程序运行中，请用合适信号退出");
+    while(1);
+    return 0;
+}
+
+
