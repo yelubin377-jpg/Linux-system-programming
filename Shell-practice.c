@@ -197,23 +197,28 @@
 
 
 
-//signal(信号类型，执行函数)
-#include<stdio.h>//printf
-#include<signal.h>//signal();
-#include<stdlib.h> //exit
+// //signal(信号类型，执行函数)
+// #include<stdio.h>//printf
+// #include<signal.h>//signal();
+// #include<stdlib.h> //exit
 
-void CeShi(int sig)
-{
-    printf("收到");
-    exit(0);
-}
-int main()
-{
-    signal(SIGTERM,CeShi);
-    signal(SIGINT,CeShi);
-    printf("程序运行中，请用合适信号退出");
-    while(1);
-    return 0;
-}
+// void CeShi(int sig)
+// {
+//     printf("\n收到\n");
+//     fflush(stdout);
+//     exit(0);
+// }
+// int main()
+// {
+//     signal(SIGTERM,CeShi);
+//     signal(SIGINT,CeShi);
+//     printf("程序运行中，请用合适信号退出\n");
+//     fflush(stdout);
+//     while(1)
+//     {
+//         pause();
+//     }
+//     return 0;
+// }
 
 
