@@ -1,0 +1,99 @@
+#include "Server.h"
+
+#include<cstdio>
+#include<iostream>
+#include<cstring>
+#include<thread>
+#include<unistd.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
+#include<arpa/inet.h>
+//
+Server::Server(int port,std::string RootDir)
+    :_Port(port)
+    ,_RootDir(std::move(RootDir))
+{
+}
+Server::~Server()
+{
+}
+//
+void Server::run()
+{
+    _ListenFd=socket(AF_INET,SOCK_STREAM,0);
+    if(_ListenFd<0)
+    {
+        std::cerr << "socket() boom!!!:" << std::strerror(errno) << std::endl;
+        return;
+    }
+
+    //
+
+    int opt = 1;
+    setsockopt(_ListenFd,SOL_SOCKET,SO_REUSEADDR,&opt,sizeof(opt));
+
+    //
+
+    struct sockaddr_in addr;
+    memset(&addr,0,sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(_Port);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    //
+
+    int BindRet = bind(_ListenFd,(sockaddr*)&addr,sizeof(addr));
+    if(BindRet<0)
+    {
+        std::cerr << "bind() boom!!!:" << std::strerror(errno) << std::endl;
+        return;
+    }
+
+    //
+
+    int ListenRet = listen(_ListenFd,SOMAXCONN);
+    if(ListenRet<0)
+    {
+        std::cerr << "listen() boom!!!" << std::strerror(errno) << std::endl;
+        return;
+    }
+
+    //
+
+    printf("Server listening on port %d\n",_Port);
+
+    //
+
+    _Running = true;
+    while(_Running)
+    {
+        struct sockaddr_in ClientAddr;
+        socklen_t ClientLen = sizeof(ClientAddr);
+        int AcceptRet = accept(_ListenFd,(sockaddr*)&ClientAddr,&ClientLen);
+        if(AcceptRet<0)
+        {
+            continue;
+        }
+        printf("顾客或者说客户端的IP是:%s\n",inet_ntoa(ClientAddr.sin_addr));
+
+        //
+
+        std::thread([this,AcceptRet]()
+        {
+
+        }).detach();
+    }   
+
+    //
+
+
+
+
+
+
+
+    
+
+
+
+}
