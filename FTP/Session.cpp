@@ -8,6 +8,8 @@
 #include<iostream>
 #include<netinet/in.h>
 #include<arpa/inet.h>
+#include<fcntl.h>
+#include<sys/stat.h>
 
 Session::Session(int ClientFd,const std::string& RootDir)
     :_ClientFd(ClientFd)
@@ -141,6 +143,16 @@ void Session::run()
             }
         }
         
+        else if(strcmp(buf,"SYST")==0)
+        {
+            const char* msg = "215 UNIX Type: L8\r\n";
+            send(_ClientFd,msg,strlen(msg),0);
+        }
+        else if(strcmp(buf,"FEAT")==0)
+        {
+            const char* msg = "211-Features:\r\n SIZE\r\n MDTM\r\n211 End\r\n";
+            send(_ClientFd,msg,strlen(msg),0);
+        }
         else if(strcmp(buf,"PASV")==0)
         {
             if(_DataFd != -1)
@@ -167,50 +179,53 @@ void Session::run()
             if(bindRet < 0)
             {
                 std::cerr << "DataFd bind boom!!!!!!!!" << std::strerror(errno) << std::endl;
-                return;
+                close(_DataFd);
+                _DataFd = -1;
+                const char* errMsg = "425 Can't open data connection\r\n";
+                send(_ClientFd,errMsg,strlen(errMsg),0);
             }
-
-            //
-
-            int listenRet = listen(_DataFd,1);//  0不排队，1排队 
-            if(listenRet < 0)
+            else
             {
-                std::cerr << "DataFd listen boom!!!!!!!!" << std::strerror(errno) << std::endl;
-            }
-            
-            //
-            
-            socklen_t AddrLen = sizeof(DataAddr);
-            getsockname(_DataFd,(sockaddr*)&DataAddr,(socklen_t*)&AddrLen);
-            uint16_t DataPort = ntohs(DataAddr.sin_port);
-            
-            //
-            
-            struct sockaddr_in LocalAddr;
-            socklen_t LocalLen = sizeof(LocalAddr);
-            getsockname(_ClientFd,(sockaddr*)&LocalAddr,(socklen_t*)&LocalLen);
-            const char* IPStr = inet_ntoa(LocalAddr.sin_addr);
-            uint8_t p1 = DataPort / 256; //高位字节
-            uint8_t p2 = DataPort % 256; //低位
-            //p1*256 + p2
-            
-            //
-
-            char IPstandard[16];
-            strcpy(IPstandard,IPStr);
-            for(int i = 0;IPstandard[i];i++)
-            {
-                if(IPstandard[i] == '.')
+                int listenRet = listen(_DataFd,1);//  0不排队，1排队
+                if(listenRet < 0)
                 {
-                    IPstandard[i] = ',';
+                    std::cerr << "DataFd listen boom!!!!!!!!" << std::strerror(errno) << std::endl;
                 }
+
+                //
+
+                socklen_t AddrLen = sizeof(DataAddr);
+                getsockname(_DataFd,(sockaddr*)&DataAddr,(socklen_t*)&AddrLen);
+                uint16_t DataPort = ntohs(DataAddr.sin_port);
+
+                //
+
+                struct sockaddr_in LocalAddr;
+                socklen_t LocalLen = sizeof(LocalAddr);
+                getsockname(_ClientFd,(sockaddr*)&LocalAddr,(socklen_t*)&LocalLen);
+                const char* IPStr = inet_ntoa(LocalAddr.sin_addr);
+                uint8_t p1 = DataPort / 256; //高位字节
+                uint8_t p2 = DataPort % 256; //低位
+                //p1*256 + p2
+
+                //
+
+                char IPstandard[16];
+                strcpy(IPstandard,IPStr);
+                for(int i = 0;IPstandard[i];i++)
+                {
+                    if(IPstandard[i] == '.')
+                    {
+                        IPstandard[i] = ',';
+                    }
+                }
+
+                //
+
+                char PasvMsg[128];
+                snprintf(PasvMsg,sizeof(PasvMsg),"227 Entering Passive Mode (%s,%u,%u)\r\n",IPstandard,p1,p2);
+                send(_ClientFd,PasvMsg,strlen(PasvMsg),0);
             }
-
-            //
-
-            char PasvMsg[128];
-            snprintf(PasvMsg,sizeof(PasvMsg),"227 Entering Passive Mode (%s,%u,%u)\r\n",IPstandard,p1,p2);
-            send(_ClientFd,PasvMsg,strlen(PasvMsg),0);
         }
 
         //
@@ -218,106 +233,128 @@ void Session::run()
         else if(strcmp(buf,"LIST") == 0)
         {
             int DataClientFd = accept(_DataFd,nullptr,nullptr);
-            const char* OpenMsg = "150 Opening ASCII mode data connection\r\n";
-            send(_ClientFd,OpenMsg,strlen(OpenMsg),0);
-
-            //
-
-            FILE* fd = popen("ls -l","r");
-            char line[1024];
-            while(fgets(line,sizeof(line),fd))
+            if(DataClientFd < 0)
             {
-                send(DataClientFd,line,strlen(line),0);
+                const char* msg = "425 Can't open data connection\r\n";
+                send(_ClientFd,msg,strlen(msg),0);
             }
-
-            //
-
-            pclose(fd);
-            close(DataClientFd);
-
-            //
-
-            const char* DoneMsg = "226 Transfer complete\r\n";
-            send(_ClientFd,DoneMsg,strlen(DoneMsg),0);
-
-        }
-        else if(strcmp(buf,"RETR") == 0 && num)
-        {
-            int DataClientFd = accept(_DataFd,nullptr,nullptr);
-            const char* OpenMsg = "150 Opening binary mode data connection\r\n";
-            send(_ClientFd,OpenMsg,strlen(OpenMsg),0);
-
-            //
-
-            FILE* fd = fopen(num,"rb");
-            if(fd)
+            else
             {
-                char buf[4096];
-                size_t n = 0;
-                while((n = fread(buf,1,sizeof(buf),fd)) > 0)
+                const char* OpenMsg = "150 Opening ASCII mode data connection\r\n";
+                send(_ClientFd,OpenMsg,strlen(OpenMsg),0);
+
+                //
+
+                FILE* fd = popen("ls -l","r");
+                char line[1024];
+                while(fgets(line,sizeof(line),fd))
                 {
-                    send(DataClientFd,buf,n,0);
+                    send(DataClientFd,line,strlen(line),0);
                 }
-                fclose(fd);
+
+                //
+
+                pclose(fd);
                 close(DataClientFd);
 
                 //
 
                 const char* DoneMsg = "226 Transfer complete\r\n";
-                send(_ClientFd, DoneMsg, strlen(DoneMsg), 0);
+                send(_ClientFd,DoneMsg,strlen(DoneMsg),0);
+            }
+        }
+        else if(strcmp(buf,"RETR") == 0 && num)
+        {
+            int DataClientFd = accept(_DataFd,nullptr,nullptr);
+            if(DataClientFd < 0)
+            {
+                const char* msg = "425 Can't open data connection\r\n";
+                send(_ClientFd,msg,strlen(msg),0);
             }
             else
             {
-                close(DataClientFd);
-                const char* ErrMsg = "550 File not found\r\n";
-                send(_ClientFd, ErrMsg, strlen(ErrMsg), 0);
+                const char* OpenMsg = "150 Opening binary mode data connection\r\n";
+                send(_ClientFd,OpenMsg,strlen(OpenMsg),0);
+
+                //
+
+                FILE* fd = fopen(num,"rb");
+                if(fd)
+                {
+                    char buf[4096];
+                    size_t n = 0;
+                    while((n = fread(buf,1,sizeof(buf),fd)) > 0)
+                    {
+                        send(DataClientFd,buf,n,0);
+                    }
+                    fclose(fd);
+                    close(DataClientFd);
+
+                    //
+
+                    const char* DoneMsg = "226 Transfer complete\r\n";
+                    send(_ClientFd, DoneMsg, strlen(DoneMsg), 0);
+                }
+                else
+                {
+                    close(DataClientFd);
+                    const char* ErrMsg = "550 File not found\r\n";
+                    send(_ClientFd, ErrMsg, strlen(ErrMsg), 0);
+                }
             }
         }
         else if(strcmp(buf,"STOR") == 0 && num)
         {
             int DataClientFd = accept(_DataFd,nullptr,nullptr);
-            const char* Message1000 = "150 Opening binary mode data connection\r\n";
-            send(_ClientFd,Message1000,strlen(Message1000),0);
-
-            //
-
-            FILE* fd = fopen(num,"wb");
-            if(fd)
+            if(DataClientFd < 0)
             {
-                char buf[4096];
-                ssize_t n = 0;
-                while((n = recv(DataClientFd,buf,sizeof(buf),0)) > 0)
-                {
-                    fwrite(buf,1,n,fd);
-                }
-                fclose(fd);
-                close(DataClientFd);
-                
-                //
-
-                char HashCmd[1100];
-                snprintf(HashCmd,sizeof(HashCmd),"md5sum %s",num);
-                FILE* fp = popen(HashCmd,"r");
-                char HashResult[256] = "";
-                if(fp)
-                {
-                    fgets(HashResult,sizeof(HashResult),fp);
-                    pclose(fp);
-                }
-
-                //
-                
-                char DoneMsg[1400];
-                snprintf(DoneMsg,sizeof(DoneMsg),"226 Transfer complete. MD5: %s\r\n",HashResult);
-                send(_ClientFd,DoneMsg,strlen(DoneMsg),0);
+                const char* msg = "425 Can't open data connection\r\n";
+                send(_ClientFd,msg,strlen(msg),0);
             }
             else
             {
-                close(DataClientFd);
-                const char* ErrMsg = "550 Failed to create file\r\n";
-                send(_ClientFd,ErrMsg,strlen(ErrMsg),0);
-            }
+                const char* Message1000 = "150 Opening binary mode data connection\r\n";
+                send(_ClientFd,Message1000,strlen(Message1000),0);
 
+                //
+
+                FILE* fd = fopen(num,"wb");
+                if(fd)
+                {
+                    char buf[4096];
+                    ssize_t n = 0;
+                    while((n = recv(DataClientFd,buf,sizeof(buf),0)) > 0)
+                    {
+                        fwrite(buf,1,n,fd);
+                    }
+                    fclose(fd);
+                    close(DataClientFd);
+
+                    //
+
+                    char HashCmd[1100];
+                    snprintf(HashCmd,sizeof(HashCmd),"md5sum %s",num);
+                    FILE* fp = popen(HashCmd,"r");
+                    char HashResult[256] = "";
+                    if(fp)
+                    {
+                        fgets(HashResult,sizeof(HashResult),fp);
+                        pclose(fp);
+                    }
+
+                    //
+
+                    char DoneMsg[1400];
+                    snprintf(DoneMsg,sizeof(DoneMsg),"226 Transfer complete. MD5: %s\r\n",HashResult);
+                    send(_ClientFd,DoneMsg,strlen(DoneMsg),0);
+                }
+                else
+                {
+                    close(DataClientFd);
+                    const char* ErrMsg = "550 Failed to create file\r\n";
+                    send(_ClientFd,ErrMsg,strlen(ErrMsg),0);
+                }
+            }
         }
         
 
@@ -325,6 +362,26 @@ void Session::run()
         
         //
         
+        else if(strcmp(buf,"SIZE") == 0 && num)
+        {
+            struct stat st;
+            if(stat(num,&st) == 0 && S_ISREG(st.st_mode))
+            {
+                char SizeMsg[64];
+                snprintf(SizeMsg,sizeof(SizeMsg),"213 %ld\r\n",(long)st.st_size);
+                send(_ClientFd,SizeMsg,strlen(SizeMsg),0);
+            }
+            else
+            {
+                const char* ErrMsg = "550 File not found\r\n";
+                send(_ClientFd,ErrMsg,strlen(ErrMsg),0);
+            }
+        }
+
+
+
+        //
+
         else
         {
             const char* message = "502 Not-found!!!\r\n";
