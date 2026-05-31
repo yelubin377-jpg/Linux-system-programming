@@ -129,6 +129,11 @@ void Session::run()
                 const char* message3 = "200 Type set to I\r\n";
                 send(_ClientFd,message3,strlen(message3),0);
             }
+            else if(num && strcmp(num,"A")==0)
+            {
+                const char* message3 = "200 Type set to A\r\n";
+                send(_ClientFd,message3,strlen(message3),0);
+            }
             else
             {
                 const char* message3 = "504 Type not supported\r\n";
@@ -254,13 +259,19 @@ void Session::run()
                     send(DataClientFd,buf,n,0);
                 }
                 fclose(fd);
+                close(DataClientFd);
+
+                //
+
+                const char* DoneMsg = "226 Transfer complete\r\n";
+                send(_ClientFd, DoneMsg, strlen(DoneMsg), 0);
             }
-            close(DataClientFd);
-
-            //
-
-            const char* DoneMsg = "226 Transfer complete\r\n";
-            send(_ClientFd, DoneMsg, strlen(DoneMsg), 0);   
+            else
+            {
+                close(DataClientFd);
+                const char* ErrMsg = "550 File not found\r\n";
+                send(_ClientFd, ErrMsg, strlen(ErrMsg), 0);
+            }
         }
         else if(strcmp(buf,"STOR") == 0 && num)
         {
