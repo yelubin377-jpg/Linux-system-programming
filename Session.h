@@ -10,4 +10,7 @@ public:
 private:
     int _ClientFd;
     std::string _RootDir;
+    std::string _Username;
+    bool _WhetherLogin;
+    int _DataFd;
 };

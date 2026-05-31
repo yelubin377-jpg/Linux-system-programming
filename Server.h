@@ -2,13 +2,6 @@
 #include <string> 
 #include <atomic>
 
-#include<iostream>
-#include<cstring>
-#include<thread>
-#include<unistd.h>
-#include<sys/socket.h>
-#include<netinet/in.h>
-#include<arpa/inet.h>
 
 class Server
 {

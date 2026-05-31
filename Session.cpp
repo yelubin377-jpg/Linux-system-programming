@@ -7,6 +7,7 @@
 #include<ctype.h>
 #include<iostream>
 #include<netinet/in.h>
+#include<arpa/inet.h>
 
 Session::Session(int ClientFd,const std::string& RootDir)
     :_ClientFd(ClientFd)
@@ -17,6 +18,10 @@ Session::Session(int ClientFd,const std::string& RootDir)
 
 Session::~Session()
 {
+    if(_DataFd != -1)
+    {
+        close(_DataFd);
+    }
     close(_ClientFd);
 }
 
@@ -68,12 +73,17 @@ void Session::run()
             close(_ClientFd);
             break;
         }
+        else if(strcmp(buf,"Let's 狗!") == 0)
+        {
+            const char* LanHuaCao = "200 这么能串让你串完了呗!>`'`<\r\n";
+            send(_ClientFd,LanHuaCao,strlen(LanHuaCao),0);
+        }
         else if(strcmp(buf,"PWD")==0)
         {
             char cwd[1024];
             getcwd(cwd,sizeof(cwd));
             char MessagePWD[1200];
-            snprintf(MessagePWD,sizeof(MessagePWD),"257 NowPath is that %s\r\n",cwd);
+            snprintf(MessagePWD,sizeof(MessagePWD),"257 NowPath is that \"%s\" \r\n",cwd);
             send(_ClientFd,MessagePWD,strlen(MessagePWD),0);
         }
 
@@ -128,6 +138,10 @@ void Session::run()
         
         else if(strcmp(buf,"PASV")==0)
         {
+            if(_DataFd != -1)
+            {
+                close(_DataFd);
+            }
             _DataFd = socket(AF_INET,SOCK_STREAM,0);
             if(_DataFd < 0)
             {
@@ -163,14 +177,138 @@ void Session::run()
             
             socklen_t AddrLen = sizeof(DataAddr);
             getsockname(_DataFd,(sockaddr*)&DataAddr,(socklen_t*)&AddrLen);
+            uint16_t DataPort = ntohs(DataAddr.sin_port);
             
+            //
             
-             
+            struct sockaddr_in LocalAddr;
+            socklen_t LocalLen = sizeof(LocalAddr);
+            getsockname(_ClientFd,(sockaddr*)&LocalAddr,(socklen_t*)&LocalLen);
+            const char* IPStr = inet_ntoa(LocalAddr.sin_addr);
+            uint8_t p1 = DataPort / 256; //高位字节
+            uint8_t p2 = DataPort % 256; //低位
+            //p1*256 + p2
+            
+            //
 
+            char IPstandard[16];
+            strcpy(IPstandard,IPStr);
+            for(int i = 0;IPstandard[i];i++)
+            {
+                if(IPstandard[i] == '.')
+                {
+                    IPstandard[i] = ',';
+                }
+            }
 
+            //
 
+            char PasvMsg[128];
+            snprintf(PasvMsg,sizeof(PasvMsg),"227 Entering Passive Mode (%s,%u,%u)\r\n",IPstandard,p1,p2);
+            send(_ClientFd,PasvMsg,strlen(PasvMsg),0);
+        }
+
+        //
+
+        else if(strcmp(buf,"LIST") == 0)
+        {
+            int DataClientFd = accept(_DataFd,nullptr,nullptr);
+            const char* OpenMsg = "150 Opening ASCII mode data connection\r\n";
+            send(_ClientFd,OpenMsg,strlen(OpenMsg),0);
+
+            //
+
+            FILE* fd = popen("ls -l","r");
+            char line[1024];
+            while(fgets(line,sizeof(line),fd))
+            {
+                send(DataClientFd,line,strlen(line),0);
+            }
+
+            //
+
+            pclose(fd);
+            close(DataClientFd);
+
+            //
+
+            const char* DoneMsg = "226 Transfer complete\r\n";
+            send(_ClientFd,DoneMsg,strlen(DoneMsg),0);
 
         }
+        else if(strcmp(buf,"RETR") == 0 && num)
+        {
+            int DataClientFd = accept(_DataFd,nullptr,nullptr);
+            const char* OpenMsg = "150 Opening binary mode data connection\r\n";
+            send(_ClientFd,OpenMsg,strlen(OpenMsg),0);
+
+            //
+
+            FILE* fd = fopen(num,"rb");
+            if(fd)
+            {
+                char buf[4096];
+                size_t n = 0;
+                while((n = fread(buf,1,sizeof(buf),fd)) > 0)
+                {
+                    send(DataClientFd,buf,n,0);
+                }
+                fclose(fd);
+            }
+            close(DataClientFd);
+
+            //
+
+            const char* DoneMsg = "226 Transfer complete\r\n";
+            send(_ClientFd, DoneMsg, strlen(DoneMsg), 0);   
+        }
+        else if(strcmp(buf,"STOR") == 0 && num)
+        {
+            int DataClientFd = accept(_DataFd,nullptr,nullptr);
+            const char* Message1000 = "150 Opening binary mode data connection\r\n";
+            send(_ClientFd,Message1000,strlen(Message1000),0);
+
+            //
+
+            FILE* fd = fopen(num,"wb");
+            if(fd)
+            {
+                char buf[4096];
+                ssize_t n = 0;
+                while((n = recv(DataClientFd,buf,sizeof(buf),0)) > 0)
+                {
+                    fwrite(buf,1,n,fd);
+                }
+                fclose(fd);
+                close(DataClientFd);
+                
+                //
+
+                char HashCmd[1100];
+                snprintf(HashCmd,sizeof(HashCmd),"md5sum %s",num);
+                FILE* fp = popen(HashCmd,"r");
+                char HashResult[256] = "";
+                if(fp)
+                {
+                    fgets(HashResult,sizeof(HashResult),fp);
+                    pclose(fp);
+                }
+
+                //
+                
+                char DoneMsg[1400];
+                snprintf(DoneMsg,sizeof(DoneMsg),"226 Transfer complete. MD5: %s\r\n",HashResult);
+                send(_ClientFd,DoneMsg,strlen(DoneMsg),0);
+            }
+            else
+            {
+                close(DataClientFd);
+                const char* ErrMsg = "550 Failed to create file\r\n";
+                send(_ClientFd,ErrMsg,strlen(ErrMsg),0);
+            }
+
+        }
+        
 
 
         
@@ -181,6 +319,7 @@ void Session::run()
             const char* message = "502 Not-found!!!\r\n";
             send(_ClientFd,message,strlen(message),0);
         }
+
 
     }
 

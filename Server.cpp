@@ -1,4 +1,5 @@
 #include "Server.h"
+#include "Session.h"
 
 #include<cstdio>
 #include<iostream>
@@ -17,7 +18,7 @@ Server::Server(int port,std::string RootDir)
 Server::~Server()
 {
 }
-//
+//socket 到  
 void Server::run()
 {
     _ListenFd=socket(AF_INET,SOCK_STREAM,0);
@@ -42,7 +43,7 @@ void Server::run()
 
     //
 
-    int BindRet = bind(_ListenFd,(sockaddr*)&addr,sizeof(addr));
+    int BindRet = bind(_ListenFd,(sockaddr*)&addr,sizeof(addr));                                                          
     if(BindRet<0)
     {
         std::cerr << "bind() boom!!!:" << std::strerror(errno) << std::endl;
@@ -69,18 +70,19 @@ void Server::run()
     {
         struct sockaddr_in ClientAddr;
         socklen_t ClientLen = sizeof(ClientAddr);
-        int AcceptRet = accept(_ListenFd,(sockaddr*)&ClientAddr,&ClientLen);
+        int AcceptRet = accept(_ListenFd,(sockaddr*)&ClientAddr,&ClientLen);  //AcceptRet其实就是ClientFd
         if(AcceptRet<0)
         {
             continue;
         }
-        printf("顾客或者说客户端的IP是:%s\n",inet_ntoa(ClientAddr.sin_addr));
+        printf("Clients' IP is:%s\n",inet_ntoa(ClientAddr.sin_addr));
 
         //
 
         std::thread([this,AcceptRet]()
         {
-
+            Session session(AcceptRet,_RootDir);
+            session.run();
         }).detach();
     }   
 
@@ -93,7 +95,5 @@ void Server::run()
 
 
     
-
-
 
 }
