@@ -73,11 +73,11 @@ void Session::run()
             close(_ClientFd);
             break;
         }
-        else if(strcmp(buf,"Let's 狗!") == 0)
-        {
-            const char* LanHuaCao = "200 这么能串让你串完了呗!>`'`<\r\n";
-            send(_ClientFd,LanHuaCao,strlen(LanHuaCao),0);
-        }
+        //else if(strcmp(buf,"LET'S 狗!") == 0)
+        //{
+        //    const char* LanHuaCao = "200 这么能串让你串完了呗!>`'`<\r\n"; //200：命令成功
+        //    send(_ClientFd,LanHuaCao,strlen(LanHuaCao),0);
+        //}  //ftp不认识，无法实现，除非nc直连
         else if(strcmp(buf,"PWD")==0)
         {
             char cwd[1024];
