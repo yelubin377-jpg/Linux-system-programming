@@ -24,7 +24,7 @@ Session::~Session()
     {
         close(_DataFd);
     }
-    close(_ClientFd);
+    close(_ClientFd);               ///?!
 }
 
 void Session::run()
@@ -56,7 +56,7 @@ void Session::run()
 
         //
 
-        char* FindSpace = strchr(buf,' ');
+        char* FindSpace = strchr(buf,' ');  
         char* cmd = buf;
         char* num = nullptr;
         if(FindSpace != nullptr)
@@ -85,7 +85,7 @@ void Session::run()
             char cwd[1024];
             getcwd(cwd,sizeof(cwd));
             char MessagePWD[1200];
-            snprintf(MessagePWD,sizeof(MessagePWD),"257 NowPath is that \"%s\" \r\n",cwd);
+            snprintf(MessagePWD,sizeof(MessagePWD),"257 \"%s\" \r\n",cwd);
             send(_ClientFd,MessagePWD,strlen(MessagePWD),0);
         }
 
